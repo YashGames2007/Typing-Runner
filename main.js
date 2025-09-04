@@ -78,7 +78,7 @@ let momentum = 0;
 
 
 // 3D Characters
-import { FBXLoader } from './node_modules/three/examples/jsm/loaders/FBXLoader.js';
+import { FBXLoader } from './threelabs/three/examples/jsm/loaders/FBXLoader.js';
 
 
 const loader = new FBXLoader();
