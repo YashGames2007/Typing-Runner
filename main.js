@@ -237,8 +237,8 @@ function newLine() {
 
 function resetPositions()
 {
-    if (player) {player.position.set(0, 1, 0);}
-    if (enemy) {enemy.position.set(0, 1, 5);}
+    if (player) {player.position.set(0, 0, 0);}
+    if (enemy) {enemy.position.set(0, 0, 5);}
     momentum = 0;
     if (playerAction) {
             playerAction.reset();   // rewind to first frame
