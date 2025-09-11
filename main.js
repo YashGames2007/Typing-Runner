@@ -567,7 +567,7 @@ function makeRiftGroup(){
 const riftPool = []; const RIFT_COUNT = 3;
 function placeRift(r, first=false){
   const side = Math.random()<0.5?-1:1; const x = side*(9+Math.random()*6);
-  const y = 0.6+Math.random()*1.6; const z = first? (-(70+Math.random()*160)) : (-(100+Math.random()*200));
+  const y = .6+Math.random()*1.6; const z = first? (-(70+Math.random()*160)) : (-(100+Math.random()*200));
   r.position.set(x,y,z); r.rotation.y = (Math.random()*0.3-0.15);
   r.userData.pulse = 0; r.userData.phase = Math.random()*Math.PI*2;
 }
