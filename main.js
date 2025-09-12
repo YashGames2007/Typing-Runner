@@ -1,8 +1,9 @@
+
 console.log("Started");
 
-import * as THREE from "./three.js";
-import { OrbitControls } from "./orbitControls.js";
-import { FBXLoader } from './threelabs/three/examples/jsm/loaders/FBXLoader.js';
+import * as THREE from "three";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
+import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader";
 
 const canvas = document.getElementById("game");
 const renderer = new THREE.WebGLRenderer({
@@ -19,7 +20,7 @@ scene.fog = new THREE.Fog(new THREE.Color(0x2a0b07), 10, 220); // deep red-ish f
 
 // Camera + Controls
 const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.1, 1000);
-camera.position.set(0, 3, 5);
+camera.position.set(0, 2.2, 5);
 // camera.rotation.y = Math.PI / 2;
 
 const controls = new OrbitControls(camera, renderer.domElement);
@@ -57,7 +58,7 @@ scene.add(lightningLight);
 // ---------- SKY / BACKDROP ----------
 // Uses the provided image as dramatic clouds background. We set it as a large distant plane
 const loader = new THREE.TextureLoader();
-loader.load("./public/backdrop3.png", function (texture) {
+loader.load("/backdrop3.png", function (texture) {
     scene.background = texture; // directly set as background
 });
 // Create HTML video element
@@ -66,7 +67,7 @@ loader.load("./public/backdrop3.png", function (texture) {
 // Create HTML video element
 // --- Video Element ---
 const video = document.createElement('video');
-video.src = './public/background.mp4';  // your file
+video.src = '/background.mp4';  // your file
 video.loop = true;
 video.muted = true;
 video.autoplay = true;
@@ -1047,6 +1048,7 @@ function updatePlayer0Speed() {
     if (wpm < 15 || acc < 0.5) {
         // stop the player if typing speed is too low
         player0Speed = wpm * acc * 0.1;
+        
         return;
     }
 
@@ -1054,7 +1056,7 @@ function updatePlayer0Speed() {
     const wpmFactor = Math.min(wpm / 100, 1.5);
 
     // balanced formula for speed
-    player0Speed = (0.5 + accFactor + wpmFactor * 0.5);
+    player0Speed = (accFactor * wpmFactor * 3);
 }
 
 
