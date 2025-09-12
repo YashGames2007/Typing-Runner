@@ -91,6 +91,13 @@ videoMesh.renderOrder = -1;
 videoMesh.position.y = 2.5;
 scene.add(videoMesh);
 
+function updateVideoBackdrop() {
+    videoMesh.position.copy(camera.position);
+    videoMesh.position.z -= 5;   // always 20 units behind camera
+    videoMesh.position.y = camera.position.y;
+    // videoMesh.lookAt(camera.position);
+}
+
 
 // Very large plane behind the world as backdrop so we can keep fog and depth
 // const skyMat = new THREE.MeshBasicMaterial({ map: skyTex });
@@ -613,34 +620,34 @@ boltMesh.position.set(-6, 18, -60);
 scene.add(boltMesh);
 
 // ---------- Player/Enemy loaders & base game logic kept largely unchanged ----------
-let player, playerMixer, playerAction, playerIdleAction;
+// let player, playerMixer, playerAction, playerIdleAction;
 let enemy, enemyMixer, enemyAction, enemyIdleAction;
 
 const fbxLoader = new FBXLoader();
 
-fbxLoader.load('/models/player.fbx', (object) => {
-    player = object;
-    player.scale.set(0.01, 0.01, 0.01);
-    player.rotation.set(0, 135, 0);
-    scene.add(player);
-    playerMixer = new THREE.AnimationMixer(player);
-    if (object.animations && object.animations.length > 0) {
-        playerAction = playerMixer.clipAction(object.animations[0]);
-    }
-    fbxLoader.load('/models/idle.fbx', (animObj) => {
-        if (animObj.animations.length > 0) {
-            const idleClip = animObj.animations[0];
-            playerIdleAction = playerMixer.clipAction(idleClip);
-            playerIdleAction.play();
-        }
-    });
-    resetPositions();
-});
+// fbxLoader.load('/models/player.fbx', (object) => {
+//     player = object;
+//     player.scale.set(0.01, 0.01, 0.01);
+//     player.rotation.set(0, 135, 0);
+//     scene.add(player);
+//     playerMixer = new THREE.AnimationMixer(player);
+//     if (object.animations && object.animations.length > 0) {
+//         playerAction = playerMixer.clipAction(object.animations[0]);
+//     }
+//     fbxLoader.load('/models/idle.fbx', (animObj) => {
+//         if (animObj.animations.length > 0) {
+//             const idleClip = animObj.animations[0];
+//             playerIdleAction = playerMixer.clipAction(idleClip);
+//             playerIdleAction.play();
+//         }
+//     });
+//     resetPositions();
+// });
 
 fbxLoader.load('/models/enemy.fbx', (object) => {
     enemy = object;
     enemy.scale.set(0.01, 0.01, 0.01);
-    enemy.rotation.set(0, 135 * (Math.PI/180), 0);
+    enemy.rotation.set(0, 135, 0);
     scene.add(enemy);
     enemyMixer = new THREE.AnimationMixer(enemy);
     if (object.animations && object.animations.length > 0) {
@@ -655,6 +662,42 @@ fbxLoader.load('/models/enemy.fbx', (object) => {
     });
     resetPositions();
 });
+
+// Define 4 lanes
+const lanes = [-3.75, -1.25, 1.25, 3.75];
+
+// Arrays to hold 4 players and their mixers/actions
+const players = [];
+const playerMixers = [];
+const playerActions = [];
+const playerIdleActions = [];
+
+// Each player starts in their own lane
+const currentLaneIndices = [0, 1, 2, 3];
+const targetXs = lanes.slice(); // clone lanes as target X positions
+
+// Load the same FBX model 4 times for 4 players
+for (let i = 0; i < 4; i++) {
+  fbxLoader.load('/models/player'+i+'.fbx', (object) => {
+    players[i] = object;
+    players[i].scale.set(0.01, 0.01, 0.01);
+    players[i].rotation.set(0, 135, 0);
+    scene.add(players[i]);
+    playerMixers[i] = new THREE.AnimationMixer(players[i]);
+    if (object.animations && object.animations.length > 0) {
+        playerActions[i] = playerMixers[i].clipAction(object.animations[0]);
+    }
+    fbxLoader.load('/models/idle.fbx', (animObj) => {
+        if (animObj.animations.length > 0) {
+            const idleClip = animObj.animations[0];
+            playerIdleActions[i] = playerMixers[i].clipAction(idleClip);
+            playerIdleActions[i].play();
+        }
+    });
+    resetPositions();
+});
+}
+
 
 // Obstacles pool (unchanged)
 // const obstGeo = new THREE.BoxGeometry(1.3, 1.3, 1.3);
@@ -680,7 +723,8 @@ fbxLoader.load('/models/enemy.fbx', (object) => {
 //     mesh.position.set(laneX, 0.65, z);
 // }
 
-// ---------- Typing + Game Logic (unchanged, pasted for completeness) ----------
+// --- Typing Logic ---
+// ---------- Typing + Game Logic (updated) ----------
 const promptEl = document.getElementById("prompt");
 const inputEl = document.getElementById("input");
 const wpmEl = document.getElementById("wpm");
@@ -701,9 +745,13 @@ const LINES = [
 ];
 
 let target = "", idx = 0, startedAt = null;
+// typedCount and wrongCount will be recomputed from input each time
 let typedCount = 0, wrongCount = 0;
 let paused = false, gameOver = false;
 let enemyBoost = 0.1;
+
+// helper to track previous input length so we only trigger stumble on newly typed wrong char
+let prevInputLen = 0;
 
 function newLine() {
     target = LINES[(Math.random() * LINES.length) | 0];
@@ -711,12 +759,12 @@ function newLine() {
     inputEl.value = "";
     typedCount = 0;
     wrongCount = 0;
+    prevInputLen = 0;
     startedAt = null;
     renderPrompt();
     prog.style.width = "0%";
     if (gameOver) {
         resetPositions();
-        // for (const o of obstacles) resetObstacle(o, true);
         gameOver = false;
     }
     inputEl.focus();
@@ -724,75 +772,111 @@ function newLine() {
 
 function resetPositions()
 {
-    if (player) {player.position.set(0, 0, 0);}
+    for (let i = 0; i < players.length; i++)
+    {
+      if (players[i]) {players[i].position.set(lanes[i], 0, 0);}
+      if (playerActions[i]) { playerActions[i].reset(); }
+    }
     if (enemy) {enemy.position.set(0, 0, 5);}
     momentum = 0;
-    if (playerAction) { playerAction.reset(); }
 }
 
+// New renderPrompt: color each character individually:
+// - correct: user typed same char at that position => green
+// - wrong: user typed different char at that position => red
+// - current: next character to type (if no char typed there yet)
+// - rest: untouched
+// --- RENDER PROMPT FUNCTION ---
 function renderPrompt() {
-    const done = target.slice(0, idx);
-    const current = target[idx] ?? "";
-    const rest = target.slice(idx + 1);
+    const inputVal = inputEl.value || "";
+    let html = "";
 
-    const typed = inputEl.value;
-    const wrong = typed.length > 0 && typed[typed.length - 1] !== current;
+    for (let i = 0; i < target.length; i++) {
+        const expected = target[i];
+        const typed = inputVal[i];
 
-    promptEl.innerHTML =
-        `<span class="done">${escapeHTML(done)}</span>` +
-        (current
-            ? `<span class="${wrong ? "wrong" : "current"}">${escapeHTML(current)}</span>`
-            : "") +
-        `<span>${escapeHTML(rest)}</span>`;
+        if (typed !== undefined) {
+            if (typed === expected) {
+                html += `<span class="char correct">${escapeHTML(expected)}</span>`;
+            } else {
+                html += `<span class="char wrong">${escapeHTML(expected)}</span>`;
+            }
+        } else if (i === inputVal.length) {
+            html += `<span class="char current">${escapeHTML(expected)}</span>`;
+        } else {
+            html += `<span class="char future">${escapeHTML(expected)}</span>`;
+        }
+    }
+
+    promptEl.innerHTML = html;
+    idx = inputVal.length; // always advance by input length, even with mistakes
 }
+
+
 function escapeHTML(s) {
-    return s.replace(/[&<>"']/g, (m) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
+    return String(s).replace(/[&<>"']/g, (m) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
 }
 
-window.addEventListener('keydown', function (e) {
-  if (!e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) return;
-  if (gameOver) return;
-  if (e.code === 'KeyF') {
-    e.preventDefault(); e.stopImmediatePropagation();
-    if (currentLaneIndex > 0) { currentLaneIndex--; targetX = lanes[currentLaneIndex]; }
-    return;
-  }
-  if (e.code === 'KeyJ') {
-    e.preventDefault(); e.stopImmediatePropagation();
-    if (currentLaneIndex < lanes.length - 1) { currentLaneIndex++; targetX = lanes[currentLaneIndex]; }
-    return;
-  }
-}, true);
+// window.addEventListener('keydown', function (e) {
+//   if (!e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) return;
+//   if (gameOver) return;
+//   if (e.code === 'KeyF') {
+//     e.preventDefault(); e.stopImmediatePropagation();
+//     if (currentLaneIndex > 0) { currentLaneIndex--; targetX = lanes[currentLaneIndex]; }
+//     return;
+//   }
+//   if (e.code === 'KeyJ') {
+//     e.preventDefault(); e.stopImmediatePropagation();
+//     if (currentLaneIndex < lanes.length - 1) { currentLaneIndex++; targetX = lanes[currentLaneIndex]; }
+//     return;
+//   }
+// }, true);
 
+// --- INPUT HANDLER ---
 inputEl.addEventListener("input", () => {
     if (gameOver) return;
-    if (!startedAt)
-    {
+
+    // start the run on first input
+    if (!startedAt && inputEl.value.length > 0) {
         momentum = 10;
-        if (playerAction) { playerAction.play(); }
-        if (enemyAction) { enemyAction.play(); }
-        if (playerIdleAction) { playerIdleAction.stop(); }
-        if (enemyIdleAction) { enemyIdleAction.stop(); }
+        for (let i = 0; i < players.length; i++) {
+            if (playerActions[i]) playerActions[i].play();
+            if (playerIdleActions[i]) playerIdleActions[i].stop();
+        }
+        if (enemyAction) enemyAction.play();
+        if (enemyIdleAction) enemyIdleAction.stop();
         startedAt = performance.now();
     }
 
-    const currentChar = target[idx] ?? null;
-    const last = inputEl.value.slice(-1);
+    const inputVal = inputEl.value || "";
 
-    if (last === currentChar) {
-        idx++; typedCount++;
-    } else if (last === " ") {
-        while (target[idx] !== " " && idx < target.length) { idx++; }
-        idx++;
-    } else {
-        wrongCount++;
-        stumble();
-        idx++; typedCount++;
+    // recompute stats
+    typedCount = inputVal.length;
+    wrongCount = 0;
+    for (let i = 0; i < inputVal.length && i < target.length; i++) {
+        if (inputVal[i] !== target[i]) wrongCount++;
+    }
+    if (inputVal.length > target.length) {
+        wrongCount += inputVal.length - target.length;
     }
 
+    // trigger stumble only on newly added wrong char
+    if (inputVal.length > prevInputLen) {
+        const pos = inputVal.length - 1;
+        if (pos < target.length && inputVal[pos] !== target[pos]) {
+            stumble();
+        } else if (pos >= target.length) {
+            stumble();
+        }
+    }
+    prevInputLen = inputVal.length;
+
+    // update visuals
     renderPrompt();
+    updatePlayer0Speed();
     prog.style.width = (idx / Math.max(1, target.length)) * 100 + "%";
 
+    // completed line?
     if (idx >= target.length) {
         lineCompleteBurst = 1.2;
         newLine();
@@ -825,68 +909,256 @@ function computeStats() {
     const minutes = startedAt ? (now - startedAt) / 60000 : 0;
     const grossWPM = minutes > 0 ? typedCount / 5 / minutes : 0;
     const accuracy =
-        typedCount + wrongCount > 0
-            ? typedCount / (typedCount + wrongCount)
+        typedCount > 0
+            ? Math.max(0, (typedCount - wrongCount) / typedCount)
             : 1;
     return { wpm: grossWPM, acc: accuracy };
 }
 
-function playerSpeed(dt) {
+
+// ---------- Typing + Game Logic (unchanged, pasted for completeness) ----------
+
+// function resetPositions()
+// {
+//     for (let i = 0; i < players.length; i++)
+//     {
+//       if (players[i]) {players[i].position.set(lanes[i], 0, 0);}
+//       if (playerActions[i]) { playerActions[i].reset(); }
+//     }
+//     if (enemy) {enemy.position.set(0, 0, 5);}
+//     momentum = 0;
+// }
+
+// function renderPrompt() {
+//     const done = target.slice(0, idx);
+//     const current = target[idx] ?? "";
+//     const rest = target.slice(idx + 1);
+
+//     const typed = inputEl.value;
+//     const wrong = typed.length > 0 && typed[typed.length - 1] !== current;
+
+//     promptEl.innerHTML =
+//         `<span class="done">${escapeHTML(done)}</span>` +
+//         (current
+//             ? `<span class="${wrong ? "wrong" : "current"}">${escapeHTML(current)}</span>`
+//             : "") +
+//         `<span>${escapeHTML(rest)}</span>`;
+// }
+// function escapeHTML(s) {
+//     return s.replace(/[&<>"']/g, (m) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
+// }
+
+// window.addEventListener('keydown', function (e) {
+//   if (!e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) return;
+//   if (gameOver) return;
+//   if (e.code === 'KeyF') {
+//     e.preventDefault(); e.stopImmediatePropagation();
+//     if (currentLaneIndex > 0) { currentLaneIndex--; targetX = lanes[currentLaneIndex]; }
+//     return;
+//   }
+//   if (e.code === 'KeyJ') {
+//     e.preventDefault(); e.stopImmediatePropagation();
+//     if (currentLaneIndex < lanes.length - 1) { currentLaneIndex++; targetX = lanes[currentLaneIndex]; }
+//     return;
+//   }
+// }, true);
+
+// inputEl.addEventListener("input", () => {
+//     if (gameOver) return;
+//     if (!startedAt)
+//     {
+//         momentum = 10;
+
+//         for (let i = 0; i < players.length; i++) {
+//           if (playerActions[i]) { playerActions[i].play(); }
+//           if (playerIdleActions[i]) { playerIdleActions[i].stop(); }
+//         }
+//         if (enemyAction) { enemyAction.play(); }
+//         if (enemyIdleAction) { enemyIdleAction.stop(); }
+//         startedAt = performance.now();
+//     }
+
+//     const currentChar = target[idx] ?? null;
+//     const last = inputEl.value.slice(-1);
+
+//     if (last === currentChar) {
+//         idx++; typedCount++;
+//     } else if (last === " ") {
+//         while (target[idx] !== " " && idx < target.length) { idx++; }
+//         idx++;
+//     } else {
+//         wrongCount++;
+//         stumble();
+//         idx++; typedCount++;
+//     }
+
+//     renderPrompt();
+//     prog.style.width = (idx / Math.max(1, target.length)) * 100 + "%";
+
+//     if (idx >= target.length) {
+//         lineCompleteBurst = 1.2;
+//         newLine();
+//     }
+// });
+
+// refreshBtn.addEventListener("click", newLine);
+// pauseBtn.addEventListener("click", () => {
+//     paused = !paused;
+//     banner.style.display = paused ? "" : "none";
+// });
+// document.addEventListener("keydown", (e) => {
+//     if (gameOver && e.key === "Enter") {
+//         banner.style.display = "none";
+//         paused = false;
+//         newLine();
+//     }
+// });
+
+// // Speed mapping & game variables (kept structure, modified tuning slightly)
+// let stumbleTimer = 0;
+// let lineCompleteBurst = 0;
+// function stumble() {
+//     stumbleTimer = Math.min(stumbleTimer + 0.6, 1.2);
+//     enemyBoost *= 1.001;
+// }
+
+// function computeStats() {
+//     const now = performance.now();
+//     const minutes = startedAt ? (now - startedAt) / 60000 : 0;
+//     const grossWPM = minutes > 0 ? typedCount / 5 / minutes : 0;
+//     const accuracy =
+//         typedCount + wrongCount > 0
+//             ? typedCount / (typedCount + wrongCount)
+//             : 1;
+//     return { wpm: grossWPM, acc: accuracy };
+// }
+
+let momentum = 0;
+
+// --- Player Speeds ---
+const baseSpeed = 1.52;        // constant speed for AI players
+let player0Speed = 0;  // typing-controlled speed
+let isIdle = true;
+
+// Example: adjust speed by typing system (hook this to your typing accuracy logic)
+function updatePlayer0Speed() {
     const { wpm, acc } = computeStats();
-    const base = Math.max(0, (wpm - 20) * 0.08);
-    const accFactor = Math.max(0, acc);
-    let speed = base * accFactor * 2.5;
-    if (stumbleTimer > 0) speed *= 0.3;
-    if (lineCompleteBurst > 0) speed *= 1.1;
-    return Math.max(momentum, speed);
+
+    if (wpm < 15 || acc < 0.5) {
+        // stop the player if typing speed is too low
+        player0Speed = wpm * acc * 0.1;
+        return;
+    }
+
+    const accFactor = acc; // 0..1
+    const wpmFactor = Math.min(wpm / 100, 1.5);
+
+    // balanced formula for speed
+    player0Speed = (0.5 + accFactor + wpmFactor * 0.5);
 }
+
+
+// --- Animate Players ---
+function updatePlayers(delta) {
+    // move AI players
+    for (let i = 1; i < players.length; i++) {
+        if (!players[i]) continue;
+
+        players[i].position.z -= baseSpeed * delta;
+
+        // if AI is moving, make sure run is playing instead of idle
+        if (baseSpeed > 0) {
+            if (playerIdleActions[i]) playerIdleActions[i].stop();
+            if (playerActions[i] && !playerActions[i].isRunning()) {
+                playerActions[i].play();
+            }
+        } else {
+            if (playerActions[i]) playerActions[i].stop();
+            if (playerIdleActions[i] && !playerIdleActions[i].isRunning()) {
+                playerIdleActions[i].play();
+            }
+        }
+    }
+
+    // move player[0]
+    if (players[0]) players[0].position.z -= player0Speed * delta;
+}
+
+
+// --- Camera Follow ---
+// const cameraOffset = new THREE.Vector3(0, 3, 6); // height + back distance
+function updateCamera() {
+    if (!players[0]) return;
+
+    // keep current x and y, just update z relative to player[0]
+    const offsetZ = 6; // distance behind player[0]
+    camera.position.z = players[0].position.z + offsetZ;
+
+    // always look at player[0]
+    // camera.lookAt(players[0].position.x, players[0].position.y + 1.5, players[0].position.z);
+}
+
+
+// function playerSpeed(dt) {
+//     const { wpm, acc } = computeStats();
+//     const base = Math.max(0, (wpm - 20) * 0.08);
+//     const accFactor = Math.max(0, acc);
+//     let speed = base * accFactor * 2.5;
+//     if (stumbleTimer > 0) speed *= 0.3;
+//     if (lineCompleteBurst > 0) speed *= 1.1;
+//     return Math.max(momentum, speed);
+// }
 
 function enemySpeed(playerSpd) {
     return playerSpd * (enemyBoost * wrongCount * 0.1);
 }
 
-let lanes = [-2.5, 0, 2.5];
-let currentLaneIndex = 1;
-let targetX = lanes[currentLaneIndex];
-let momentum = 0;
+// // let lanes = [-2.5, 0, 2.5];
+// let currentLaneIndex = 1;
+// let targetX = lanes[currentLaneIndex];
+// let momentum = 0;
 
-let laneHistory = [];
-const enemyDelayFrames = 30;
-let enemyTargetLane = 1;
+// let laneHistory = [];
+// const enemyDelayFrames = 30;
+// let enemyTargetLane = 1;
 
-function updateEnemyLane() {
-  laneHistory.push(currentLaneIndex);
-  if (laneHistory.length > enemyDelayFrames) {
-    enemyTargetLane = laneHistory.shift();
-  }
-  const tx = lanes[enemyTargetLane];
-  if (enemy) { enemy.position.x += (tx - enemy.position.x) * 0.1; }
-}
+// function updateEnemyLane() {
+//   laneHistory.push(currentLaneIndex);
+//   if (laneHistory.length > enemyDelayFrames) {
+//     enemyTargetLane = laneHistory.shift();
+//   }
+//   const tx = lanes[enemyTargetLane];
+//   if (enemy) { enemy.position.x += (tx - enemy.position.x) * 0.1; }
+// }
 
-function updatePlayer(dt) {
-    if (player) player.position.x += (targetX - player.position.x) * dt * 10;
-}
+// // function updatePlayer(dt) {
+// //     if (player) player.position.x += (targetX - player.position.x) * dt * 10;
+// // }
 
-// collisions helper
-function intersects(a, center, radius = 0.45) {
-    const axMin = a.position.x - 0.65, axMax = a.position.x + 0.65;
-    const ayMin = 0, ayMax = 1.3;
-    const azMin = a.position.z - 0.65, azMax = a.position.z + 0.65;
-    const cx = center.x, cy = center.y, cz = center.z;
-    const dx = Math.max(axMin - cx, 0, cx - axMax);
-    const dy = Math.max(ayMin - cy, 0, cy - ayMax);
-    const dz = Math.max(azMin - cz, 0, cz - azMax);
-    const dist = Math.hypot(dx, dy, dz);
-    return dist < radius;
-}
+// // collisions helper
+// function intersects(a, center, radius = 0.45) {
+//     const axMin = a.position.x - 0.65, axMax = a.position.x + 0.65;
+//     const ayMin = 0, ayMax = 1.3;
+//     const azMin = a.position.z - 0.65, azMax = a.position.z + 0.65;
+//     const cx = center.x, cy = center.y, cz = center.z;
+//     const dx = Math.max(axMin - cx, 0, cx - axMax);
+//     const dy = Math.max(ayMin - cy, 0, cy - ayMax);
+//     const dz = Math.max(azMin - cz, 0, cz - azMax);
+//     const dist = Math.hypot(dx, dy, dz);
+//     return dist < radius;
+// }
 
 function setGameOver(msg) {
     gameOver = true;
     paused = true;
     banner.textContent = msg + " Press Enter";
     banner.style.display = "";
-    if (playerAction) { playerAction.stop(); }
-    if (playerIdleAction) { playerIdleAction.play(); }
+    for (let i = 0; i < players.length; i++) {
+      if (playerActions[i]) { playerActions[i].stop(); }
+        if (playerIdleActions[i]) { playerIdleActions[i].play(); }
+    }
+
+
     if (enemyAction) { enemyAction.stop(); }
     if (enemyIdleAction) { enemyIdleAction.play(); }
 }
@@ -933,7 +1205,9 @@ function tick(now) {
     last = now;
 
     // update mixers
-    if (playerMixer) playerMixer.update(dt);
+    for (let i = 0; i < playerMixers.length; i++) {
+        if (playerMixers[i]) playerMixers[i].update(dt);
+    }
     if (enemyMixer) enemyMixer.update(dt);
 
     // lightning auto trigger
@@ -942,9 +1216,10 @@ function tick(now) {
     }
 
     if (!paused) {
-        const spd = playerSpeed(dt);
-        const worldMove = spd * dt;
+        // const spd = playerSpeed(dt);
+        const worldMove = player0Speed * dt;
 
+        // updatePlayers(dt);
         // ground scroll
         ground.position.z += worldMove;
         if (ground.position.z > -10) ground.position.z = -150;
@@ -954,7 +1229,7 @@ function tick(now) {
         // if (billboard.position.z > 6) resetBillboard(bb, true);
         // multiple billboards (pool)
         for (const bb of billboardPool) {
-          bb.position.z += worldMove;
+          bb.position.z -= worldMove;
           if (bb.position.z > 6) resetBillboard(bb);
         }
 
@@ -964,40 +1239,33 @@ function tick(now) {
         updateVines(dt, worldMove, now*0.001);
         updateRifts(dt, worldMove, now*0.001);
         triggerRiftFlash();
-
-
+        updateVideoBackdrop();
 
         // for (const o of obstacles) {
         //     o.position.z += worldMove;
         //     if (o.position.z > 6) resetObstacle(o);
         // }
 
-        const s_pd = playerSpeed(dt);
-        const eSpd = enemySpeed(s_pd);
+        // const s_pd = playerSpeed(dt);
+        updatePlayers(dt);
+        updateCamera(dt);
+        const eSpd = enemySpeed(player0Speed);
 
-        if (player) {
-            player.position.z += eSpd * dt;
-            updatePlayer(dt);
-            updateEnemyLane(dt);
-        }
-
-        camera.position.z = 4;
-        controls.update();
-
-        // collisions
-        // if (player) {
-        //     for (const o of obstacles) {
-        //         if (intersects(o, player.position)) {
-        //             setGameOver("Crashed into obstacle!");
-        //             break;
-        //         }
-        //     }
+        //   if (player) {
+        //     player.position.z += eSpd * dt;
+        //     // updatePlayer(dt);
+        //     // updateEnemyLane(dt);
         // }
+
+          // camera.position.z = 4;
+         
+
+          // renderer.render(scene, camera);
 
         if (stumbleTimer > 0) { stumbleTimer = Math.max(0, stumbleTimer - dt); }
         if (lineCompleteBurst > 0) { lineCompleteBurst = Math.max(0, lineCompleteBurst - dt * 1.5); }
 
-        if (player && enemy && enemy.position.z <= player.position.z - 0.2) {
+        if (players[0] && enemy && enemy.position.z <= players[0].position.z - 0.2) {
             setGameOver("Caught! Press New Line.");
         }
     }
@@ -1006,10 +1274,10 @@ function tick(now) {
     const { wpm, acc } = computeStats();
     wpmEl.textContent = Math.round(wpm);
     accEl.textContent = ((acc * 100) | 0) + "%";
-    const spdNow = playerSpeed(0);
+    const spdNow = player0Speed;
     spdEl.textContent = spdNow.toFixed(1);
     let gap = 0;
-    if (player && enemy) gap = player.position.z - enemy.position.z;
+    if (players[0] && enemy) gap = players[0].position.z - enemy.position.z;
     gapEl.textContent = (gap > 0 ? "Lead " : "Behind ") + Math.abs(gap).toFixed(1) + "m";
     accEl.className = "ok";
     if (acc < 0.93) accEl.className = "danger";

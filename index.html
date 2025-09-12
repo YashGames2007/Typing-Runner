@@ -146,6 +146,29 @@
                 letter-spacing: 0.3px;
                 box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
             }
+            /* typing HUD char styles */
+            #prompt {
+                font-family: monospace;
+                white-space: pre;
+            }
+            #prompt .char {
+                padding: 0 1px;
+                border-radius: 2px;
+            }
+            #prompt .correct {
+                color: #0a0; /* green */
+            }
+            #prompt .wrong {
+                color: #e33; /* red */
+                text-decoration: underline;
+            }
+            #prompt .current {
+                background: rgba(255, 255, 255, 0.06);
+                border-bottom: 2px solid #ffd;
+            }
+            #prompt .future {
+                color: rgb(255, 255, 255);
+            } /* yet-to-type */
         </style>
     </head>
     <body>
