@@ -396,7 +396,7 @@ function makeStreetLamp(){
 }
 
 const lampPool = [];
-const LAMP_COUNT = 4;
+const LAMP_COUNT = 15;
 for(let i=0;i<LAMP_COUNT;i++){
   const L = makeStreetLamp();
   L.position.set((Math.random()<0.5?-1:1)*(8+Math.random()*6), 0, -(60+Math.random()*160));
@@ -439,7 +439,7 @@ function makeVineCluster(){
 }
 
 const vinesPool = [];
-const VINES_COUNT = 10;
+const VINES_COUNT = 20;
 for (let i=0;i<VINES_COUNT;i++){
   const v = makeVineCluster();
   v.position.set((Math.random()<0.5?-1:1)*(7.5+Math.random()*5.5), 0, -(50+Math.random()*160));
@@ -456,7 +456,7 @@ function updateVines(dt, worldMove, t){
     v.position.z += worldMove;
     const s = v.userData.baseScale * (1 + Math.sin(t*0.8 + v.userData.phase)*0.03);
     v.scale.set(s, s, s);
-    if (v.position.z > 6) resetVine(v);
+    if (v.position.z > camera.position.z) resetVine(v);
   }
 }
 
@@ -515,7 +515,7 @@ function makeRiftGroup(){
 }
 
 // Pool
-const riftPool = []; const RIFT_COUNT = 3;
+const riftPool = []; const RIFT_COUNT = 7;
 function placeRift(r, first=false){
   const side = Math.random()<0.5?-1:1; const x = side*(9+Math.random()*6);
   const y = .6+Math.random()*1.6; const z = first? (-(70+Math.random()*160)) : (-(100+Math.random()*200));
@@ -968,6 +968,132 @@ function triggerLightning() {
     nextLightningTime = performance.now() + 2000 + Math.random() * 6000;
 }
 
+// --- Scenery Pools ---
+const sceneryPool = [];
+
+// Helper to spawn objects
+function spawnScenery(mesh, roadWidth = 10, sideOffset = 5, worldDepth = 100) {
+    // pick left or right side
+    const side = Math.random() > 0.5 ? 1 : -1;
+
+    // place outside road width
+    const x = side * (roadWidth / 2 + sideOffset + Math.random() * 10);
+    const z = -20 - Math.random() * worldDepth;
+
+    mesh.position.set(x, 0, z);
+
+    scene.add(mesh);
+    sceneryPool.push(mesh);
+    return mesh;
+}
+
+
+// --- Procedural Elements ---
+
+// Tree (cylinder trunk + cone leaves)
+function makeTree() {
+    const trunk = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.5, 0.5, 4, 8),
+        new THREE.MeshStandardMaterial({ color: 0x5a3a1a })
+    );
+    const leaves = new THREE.Mesh(
+        new THREE.ConeGeometry(3, 6, 8),
+        new THREE.MeshStandardMaterial({ color: 0x0a5a0a })
+    );
+    leaves.position.y = 5;
+    trunk.add(leaves);
+    return trunk;
+}
+
+// Rock (icosahedron)
+function makeRock() {
+    return new THREE.Mesh(
+        new THREE.IcosahedronGeometry(2, 0),
+        new THREE.MeshStandardMaterial({ color: 0x555555, flatShading: true })
+    );
+}
+
+// Mushroom (cylinder + sphere)
+function makeMushroom() {
+    const stem = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.3, 0.5, 1.5, 8),
+        new THREE.MeshStandardMaterial({ color: 0xffffff })
+    );
+    const cap = new THREE.Mesh(
+        new THREE.SphereGeometry(1, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2),
+        new THREE.MeshStandardMaterial({ color: 0xff0000 })
+    );
+    cap.position.y = 0.9;
+    stem.add(cap);
+    return stem;
+}
+
+// Streetlamp (cylinder + sphere light)
+function makeLamp() {
+    const pole = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.2, 0.2, 6, 8),
+        new THREE.MeshStandardMaterial({ color: 0xaaaaaa })
+    );
+    const bulb = new THREE.Mesh(
+        new THREE.SphereGeometry(0.5, 8, 8),
+        new THREE.MeshStandardMaterial({ emissive: 0xffffaa, emissiveIntensity: 2 })
+    );
+    bulb.position.y = 3;
+    pole.add(bulb);
+    return pole;
+}
+
+// Road sign (plane)
+function makeSign() {
+    const post = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.1, 0.1, 3, 6),
+        new THREE.MeshStandardMaterial({ color: 0x888888 })
+    );
+    const board = new THREE.Mesh(
+        new THREE.BoxGeometry(2, 1.2, 0.2),
+        new THREE.MeshStandardMaterial({ color: 0x3366ff })
+    );
+    board.position.y = 1.8;
+    post.add(board);
+    return post;
+}
+
+// Floating debris (box)
+function makeDebris() {
+    return new THREE.Mesh(
+        new THREE.BoxGeometry(1, 1, 1),
+        new THREE.MeshStandardMaterial({ color: 0xaaaaaa })
+    );
+}
+
+// --- Initialize a few of each ---
+function initScenery() {
+    for (let i = 0; i < 10; i++) {
+        spawnScenery(makeTree());
+        spawnScenery(makeRock());
+        spawnScenery(makeMushroom());
+        spawnScenery(makeLamp());
+        spawnScenery(makeSign());
+        spawnScenery(makeDebris(), 10, 30);
+    }
+}
+initScenery();
+
+function updateScenery(worldMove) {
+    for (const obj of sceneryPool) {
+        obj.position.z += worldMove;
+
+        if (obj.position.z > -20) {
+            // recycle ahead in front of player
+            const side = Math.random() > 0.5 ? 1 : -1;
+            obj.position.z = -80 - Math.random() * 50;   // push far into distance
+            obj.position.x = side * (10 + Math.random() * 15);
+        }
+    }
+}
+
+
+
 // ---------- Game Loop ----------
 let last = performance.now();
 let start = false;
@@ -995,7 +1121,7 @@ function tick(now) {
         // updatePlayers(dt);
         // ground scroll
         ground.position.z += worldMove;
-        if (ground.position.z > -10) ground.position.z = -150;
+        if (ground.position.z > -10) ground.position.z -= -150;
 
         // --- NEW: UPDATE BILLBOARD POSITION ---
         // billboard.position.z += worldMove;
@@ -1003,7 +1129,7 @@ function tick(now) {
         // multiple billboards (pool)
         for (const bb of billboardPool) {
           bb.position.z += worldMove;
-          if (bb.position.z > 6) resetBillboard(bb);
+          if (bb.position.z > camera.position.z) resetBillboard(bb);
         }
 
         // worldMove computed above
@@ -1013,6 +1139,8 @@ function tick(now) {
         updateRifts(dt, worldMove, now*0.001);
         triggerRiftFlash();
         updateVideoBackdrop();
+        updateScenery(worldMove);
+
 
         updatePlayers(dt);
         updateCamera(dt);
