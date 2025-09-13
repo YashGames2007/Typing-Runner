@@ -4,7 +4,7 @@ console.log("Started");
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
+import { io } from "socket.io-client";
 
 const canvas = document.getElementById("game");
 const renderer = new THREE.WebGLRenderer({
