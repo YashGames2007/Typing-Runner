@@ -4,6 +4,7 @@ console.log("Started");
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 
 const canvas = document.getElementById("game");
 const renderer = new THREE.WebGLRenderer({
@@ -100,24 +101,6 @@ function updateVideoBackdrop() {
 }
 
 
-// Very large plane behind the world as backdrop so we can keep fog and depth
-// const skyMat = new THREE.MeshBasicMaterial({ map: skyTex });
-// const skyGeo = new THREE.PlaneGeometry(200, 120);
-// const skyPlane = new THREE.Mesh(skyGeo, skyMat);
-// skyPlane.position.set(0, 25, -140);
-// scene.add(skyPlane);
-
-// subtle volumetric-like cloud layers: two semi-transparent planes for depth
-// const cloudMat = new THREE.MeshStandardMaterial({
-//     map: skyTex,
-//     transparent: true,
-//     opacity: 0.28,
-//     depthWrite: false,
-// });
-// const cloudPlane1 = new THREE.Mesh(new THREE.PlaneGeometry(220, 120), cloudMat);
-// cloudPlane1.position.set(0, 18, -120);
-// cloudPlane1.rotation.y = 0.05;
-// scene.add(cloudPlane1);
 scene.fog = new THREE.FogExp2(0x100000, 0.04); // adjust density
 
 
@@ -127,13 +110,6 @@ const roadMat = new THREE.MeshStandardMaterial({
     roughness: 0.8,
     metalness: 0.2,
 });
-
-// --- Road Geometry (long strip in center) ---
-// const roadGeo = new THREE.PlaneGeometry(10, 400); // narrower than grass
-// const road = new THREE.Mesh(roadGeo, roadMat);
-// road.rotation.x = -Math.PI / 2;
-// road.position.set(0, 0, -150); 
-// scene.add(road);
 
 // --- Grass Material ---
 const grassMat = new THREE.MeshStandardMaterial({
@@ -213,39 +189,6 @@ const ground = new THREE.Mesh(groundGeo, groundMat);
 ground.rotation.x = -Math.PI / 2;
 ground.position.z = -150;
 scene.add(ground);
-
-// remove previous stripe geometry logic — replaced by road texture, but keep visual lane markers slightly
-// const stripeGeo = new THREE.PlaneGeometry(0.15, 3);
-// const stripeMat = new THREE.MeshBasicMaterial({
-//     color: 0x332200,
-//     side: THREE.DoubleSide,
-// });
-// const stripes = [];
-// for (let i = 0; i < 20; i++) {
-//     const s = new THREE.Mesh(stripeGeo, stripeMat);
-//     s.rotation.x = -Math.PI / 2;
-//     s.position.set(-2.5 + (i % 3) * 2.5, 0.01, -i * 16);
-//     scene.add(s);
-//     stripes.push(s);
-// }
-
-// ---------- WELCOME TO HAWKINS SIGN ----------
-// function makeSignTexture(text = "WELCOME\nTO\nHAWKINS") {
-//     const W = 512, H = 256;
-//     const c = document.createElement("canvas");
-//     c.width = W; c.height = H;
-//     const ctx = c.getContext("2d");
-//     ctx.fillStyle = "#2b2b2b";
-//     ctx.fillRect(0, 0, W, H);
-
-//     ctx.font = "bold 36px Arial";
-//     ctx.fillStyle = "#fff";
-//     ctx.textAlign = "center";
-//     ctx.textBaseline = "middle";
-//     const lines = text.split("\n");
-//     for (let i = 0; i < lines.length; i++) {
-//         ctx.fillText(lines[i], W / 2, (H / (lines.length + 1)) * (i + 1));
-//     }
 
 //     // wooden post
 //     const tex = new THREE.CanvasTexture(c);
@@ -335,7 +278,7 @@ function makeBillboard() {
 }
 
 const billboardPool = [];
-const BILLBOARD_COUNT = 6;
+const BILLBOARD_COUNT = 15;
 
 function resetBillboard(group, first=false) {
   const side = Math.random() < 0.5 ? -1 : 1;
@@ -372,7 +315,7 @@ function makeCircleSprite(size=64, inner='rgba(255,220,220,0.8)', outer='rgba(25
 }
 
 const sporeTex = makeCircleSprite(64);
-const SPORE_COUNT = 10; // denser
+const SPORE_COUNT = 100; // denser
 const sporeGeo = new THREE.BufferGeometry();
 const sporePos = new Float32Array(SPORE_COUNT*3);
 const sporeVel = new Float32Array(SPORE_COUNT);
@@ -385,7 +328,7 @@ function randomShoulderX() {
 
 // Closer Z spawn so they are visible sooner
 function randomSpawnZ() {
-  return -(Math.random()*110 + 25); // -25..-135
+  return -(Math.random()*110 + 5); // -25..-135
 }
 
 for (let i=0;i<SPORE_COUNT;i++){
@@ -625,6 +568,7 @@ scene.add(boltMesh);
 let enemy, enemyMixer, enemyAction, enemyIdleAction;
 
 const fbxLoader = new FBXLoader();
+const gltfLoader = new GLTFLoader();
 
 // fbxLoader.load('/models/player.fbx', (object) => {
 //     player = object;
@@ -644,25 +588,52 @@ const fbxLoader = new FBXLoader();
 //     });
 //     resetPositions();
 // });
+const textureLoader = new THREE.TextureLoader();
 
-fbxLoader.load('/models/enemy.fbx', (object) => {
-    enemy = object;
-    enemy.scale.set(0.01, 0.01, 0.01);
-    enemy.rotation.set(0, 135, 0);
-    scene.add(enemy);
-    enemyMixer = new THREE.AnimationMixer(enemy);
-    if (object.animations && object.animations.length > 0) {
-        enemyAction = enemyMixer.clipAction(object.animations[0]);
-    }
-    fbxLoader.load('/models/idle.fbx', (animObj) => {
-        if (animObj.animations.length > 0) {
-            const idleClip = animObj.animations[0];
-            enemyIdleAction = enemyMixer.clipAction(idleClip);
-            enemyIdleAction.play();
-        }
-    });
-    resetPositions();
-});
+const textures = {
+    Arms: textureLoader.load('/textures/T_QK_Arms00_BC.png'),
+    Body: textureLoader.load('/textures/T_QK_Body00_BC.png'),
+    Head: textureLoader.load('/textures/T_QK_Head00_BC.png'),
+    Teeth: textureLoader.load('/textures/T_QK_Teeth00_BC.png'),
+};
+
+// fbxLoader.load('/models/enemy.fbx', (object) => {
+//   object.traverse((child) => {
+//         if (child.isMesh) {
+//             // Look at the material/mesh name in console to match properly
+//             console.log("Mesh:", child.name);
+
+//             if (child.name.includes("Arm")) {
+//                 child.material = new THREE.MeshStandardMaterial({ map: textures.Arms });
+//             } else if (child.name.includes("Body")) {
+//                 child.material = new THREE.MeshStandardMaterial({ map: textures.Body });
+//             } else if (child.name.includes("Head")) {
+//                 child.material = new THREE.MeshStandardMaterial({ map: textures.Head });
+//             } else if (child.name.includes("Teeth")) {
+//                 child.material = new THREE.MeshStandardMaterial({ map: textures.Teeth });
+//             }
+//         }
+//     });
+//     enemy = object;
+//     const n = 0.1;
+//     enemy.scale.set(n, n, n);
+//     // enemy.position.set(0, -2, 5);
+//     enemy.rotation.set(0, 135, 0);
+//     scene.add(enemy);
+//     enemyMixer = new THREE.AnimationMixer(enemy);
+    
+//     if (object.animations && object.animations.length > 0) {
+//         enemyAction = enemyMixer.clipAction(object.animations[0]);
+//     }
+//     fbxLoader.load('/models/idle.fbx', (animObj) => {
+//         if (animObj.animations.length > 0) {
+//             const idleClip = animObj.animations[0];
+//             enemyIdleAction = enemyMixer.clipAction(idleClip);
+//             enemyIdleAction.play();
+//         }
+//     });
+//     resetPositions();
+// });
 
 // Define 4 lanes
 const lanes = [-3.75, -1.25, 1.25, 3.75];
@@ -678,16 +649,27 @@ const currentLaneIndices = [0, 1, 2, 3];
 const targetXs = lanes.slice(); // clone lanes as target X positions
 
 // Load the same FBX model 4 times for 4 players
+
+let size = [1.25, 1.25, 1.25, 1.25];
+
 for (let i = 0; i < 4; i++) {
-  fbxLoader.load('/models/player'+i+'.fbx', (object) => {
+  fbxLoader.load('./models/player'+i+'.fbx', (object) => {
+    // players[i] = gltf.scene;
     players[i] = object;
-    players[i].scale.set(0.01, 0.01, 0.01);
+    players[i].scale.set(size[i], size[i], size[i]);
     players[i].rotation.set(0, 135, 0);
     scene.add(players[i]);
     playerMixers[i] = new THREE.AnimationMixer(players[i]);
     if (object.animations && object.animations.length > 0) {
         playerActions[i] = playerMixers[i].clipAction(object.animations[0]);
     }
+    // fbxLoader.load('/models/running.fbx', (animObj) => {
+    //     if (animObj.animations.length > 0) {
+    //         const runningClip = animObj.animations[0];
+    //         playerActions[i] = playerMixers[i].clipAction(runningClip);
+    //         // playerActions[i].play();
+    //     }
+    // });
     fbxLoader.load('/models/idle.fbx', (animObj) => {
         if (animObj.animations.length > 0) {
             const idleClip = animObj.animations[0];
@@ -698,31 +680,6 @@ for (let i = 0; i < 4; i++) {
     resetPositions();
 });
 }
-
-
-// Obstacles pool (unchanged)
-// const obstGeo = new THREE.BoxGeometry(1.3, 1.3, 1.3);
-// const obstMat = new THREE.MeshStandardMaterial({
-//     color: 0x89b4ff,
-//     metalness: 0.2,
-//     roughness: 0.7,
-// });
-// const obstacles = [];
-// const maxObst = 18;
-// for (let i = 0; i < maxObst; i++) {
-//     const m = new THREE.Mesh(obstGeo, obstMat);
-//     resetObstacle(m, true);
-//     scene.add(m);
-//     obstacles.push(m);
-// }
-// function resetObstacle(mesh, first = false) {
-//     const laneX = [-2.5, 0, 2.5][(Math.random() * 3) | 0];
-//     const z =
-//         -40 -
-//         Math.random() * 120 -
-//         (first ? Math.random() * 200 : 0);
-//     mesh.position.set(laneX, 0.65, z);
-// }
 
 // --- Typing Logic ---
 // ---------- Typing + Game Logic (updated) ----------
@@ -818,21 +775,6 @@ function escapeHTML(s) {
     return String(s).replace(/[&<>"']/g, (m) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
 }
 
-// window.addEventListener('keydown', function (e) {
-//   if (!e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) return;
-//   if (gameOver) return;
-//   if (e.code === 'KeyF') {
-//     e.preventDefault(); e.stopImmediatePropagation();
-//     if (currentLaneIndex > 0) { currentLaneIndex--; targetX = lanes[currentLaneIndex]; }
-//     return;
-//   }
-//   if (e.code === 'KeyJ') {
-//     e.preventDefault(); e.stopImmediatePropagation();
-//     if (currentLaneIndex < lanes.length - 1) { currentLaneIndex++; targetX = lanes[currentLaneIndex]; }
-//     return;
-//   }
-// }, true);
-
 // --- INPUT HANDLER ---
 inputEl.addEventListener("input", () => {
     if (gameOver) return;
@@ -916,147 +858,22 @@ function computeStats() {
     return { wpm: grossWPM, acc: accuracy };
 }
 
-
-// ---------- Typing + Game Logic (unchanged, pasted for completeness) ----------
-
-// function resetPositions()
-// {
-//     for (let i = 0; i < players.length; i++)
-//     {
-//       if (players[i]) {players[i].position.set(lanes[i], 0, 0);}
-//       if (playerActions[i]) { playerActions[i].reset(); }
-//     }
-//     if (enemy) {enemy.position.set(0, 0, 5);}
-//     momentum = 0;
-// }
-
-// function renderPrompt() {
-//     const done = target.slice(0, idx);
-//     const current = target[idx] ?? "";
-//     const rest = target.slice(idx + 1);
-
-//     const typed = inputEl.value;
-//     const wrong = typed.length > 0 && typed[typed.length - 1] !== current;
-
-//     promptEl.innerHTML =
-//         `<span class="done">${escapeHTML(done)}</span>` +
-//         (current
-//             ? `<span class="${wrong ? "wrong" : "current"}">${escapeHTML(current)}</span>`
-//             : "") +
-//         `<span>${escapeHTML(rest)}</span>`;
-// }
-// function escapeHTML(s) {
-//     return s.replace(/[&<>"']/g, (m) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
-// }
-
-// window.addEventListener('keydown', function (e) {
-//   if (!e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) return;
-//   if (gameOver) return;
-//   if (e.code === 'KeyF') {
-//     e.preventDefault(); e.stopImmediatePropagation();
-//     if (currentLaneIndex > 0) { currentLaneIndex--; targetX = lanes[currentLaneIndex]; }
-//     return;
-//   }
-//   if (e.code === 'KeyJ') {
-//     e.preventDefault(); e.stopImmediatePropagation();
-//     if (currentLaneIndex < lanes.length - 1) { currentLaneIndex++; targetX = lanes[currentLaneIndex]; }
-//     return;
-//   }
-// }, true);
-
-// inputEl.addEventListener("input", () => {
-//     if (gameOver) return;
-//     if (!startedAt)
-//     {
-//         momentum = 10;
-
-//         for (let i = 0; i < players.length; i++) {
-//           if (playerActions[i]) { playerActions[i].play(); }
-//           if (playerIdleActions[i]) { playerIdleActions[i].stop(); }
-//         }
-//         if (enemyAction) { enemyAction.play(); }
-//         if (enemyIdleAction) { enemyIdleAction.stop(); }
-//         startedAt = performance.now();
-//     }
-
-//     const currentChar = target[idx] ?? null;
-//     const last = inputEl.value.slice(-1);
-
-//     if (last === currentChar) {
-//         idx++; typedCount++;
-//     } else if (last === " ") {
-//         while (target[idx] !== " " && idx < target.length) { idx++; }
-//         idx++;
-//     } else {
-//         wrongCount++;
-//         stumble();
-//         idx++; typedCount++;
-//     }
-
-//     renderPrompt();
-//     prog.style.width = (idx / Math.max(1, target.length)) * 100 + "%";
-
-//     if (idx >= target.length) {
-//         lineCompleteBurst = 1.2;
-//         newLine();
-//     }
-// });
-
-// refreshBtn.addEventListener("click", newLine);
-// pauseBtn.addEventListener("click", () => {
-//     paused = !paused;
-//     banner.style.display = paused ? "" : "none";
-// });
-// document.addEventListener("keydown", (e) => {
-//     if (gameOver && e.key === "Enter") {
-//         banner.style.display = "none";
-//         paused = false;
-//         newLine();
-//     }
-// });
-
-// // Speed mapping & game variables (kept structure, modified tuning slightly)
-// let stumbleTimer = 0;
-// let lineCompleteBurst = 0;
-// function stumble() {
-//     stumbleTimer = Math.min(stumbleTimer + 0.6, 1.2);
-//     enemyBoost *= 1.001;
-// }
-
-// function computeStats() {
-//     const now = performance.now();
-//     const minutes = startedAt ? (now - startedAt) / 60000 : 0;
-//     const grossWPM = minutes > 0 ? typedCount / 5 / minutes : 0;
-//     const accuracy =
-//         typedCount + wrongCount > 0
-//             ? typedCount / (typedCount + wrongCount)
-//             : 1;
-//     return { wpm: grossWPM, acc: accuracy };
-// }
-
 let momentum = 0;
 
 // --- Player Speeds ---
 const baseSpeed = 1.52;        // constant speed for AI players
 let player0Speed = 0;  // typing-controlled speed
-let isIdle = true;
+// let isIdle = true;
 
 // Example: adjust speed by typing system (hook this to your typing accuracy logic)
 function updatePlayer0Speed() {
     const { wpm, acc } = computeStats();
 
-    if (wpm < 15 || acc < 0.5) {
-        // stop the player if typing speed is too low
-        player0Speed = wpm * acc * 0.1;
-        
-        return;
-    }
-
-    const accFactor = acc; // 0..1
+    const accFactor = Math.max(acc, 0.3); // 0..1
     const wpmFactor = Math.min(wpm / 100, 1.5);
 
     // balanced formula for speed
-    player0Speed = (accFactor * wpmFactor * 3);
+    player0Speed = 2.5 + (accFactor * wpmFactor * 5);
 }
 
 
@@ -1100,55 +917,9 @@ function updateCamera() {
     // camera.lookAt(players[0].position.x, players[0].position.y + 1.5, players[0].position.z);
 }
 
-
-// function playerSpeed(dt) {
-//     const { wpm, acc } = computeStats();
-//     const base = Math.max(0, (wpm - 20) * 0.08);
-//     const accFactor = Math.max(0, acc);
-//     let speed = base * accFactor * 2.5;
-//     if (stumbleTimer > 0) speed *= 0.3;
-//     if (lineCompleteBurst > 0) speed *= 1.1;
-//     return Math.max(momentum, speed);
-// }
-
-function enemySpeed(playerSpd) {
-    return playerSpd * (enemyBoost * wrongCount * 0.1);
+function enemySpeed() {
+    return player0Speed + (enemyBoost * wrongCount);
 }
-
-// // let lanes = [-2.5, 0, 2.5];
-// let currentLaneIndex = 1;
-// let targetX = lanes[currentLaneIndex];
-// let momentum = 0;
-
-// let laneHistory = [];
-// const enemyDelayFrames = 30;
-// let enemyTargetLane = 1;
-
-// function updateEnemyLane() {
-//   laneHistory.push(currentLaneIndex);
-//   if (laneHistory.length > enemyDelayFrames) {
-//     enemyTargetLane = laneHistory.shift();
-//   }
-//   const tx = lanes[enemyTargetLane];
-//   if (enemy) { enemy.position.x += (tx - enemy.position.x) * 0.1; }
-// }
-
-// // function updatePlayer(dt) {
-// //     if (player) player.position.x += (targetX - player.position.x) * dt * 10;
-// // }
-
-// // collisions helper
-// function intersects(a, center, radius = 0.45) {
-//     const axMin = a.position.x - 0.65, axMax = a.position.x + 0.65;
-//     const ayMin = 0, ayMax = 1.3;
-//     const azMin = a.position.z - 0.65, azMax = a.position.z + 0.65;
-//     const cx = center.x, cy = center.y, cz = center.z;
-//     const dx = Math.max(axMin - cx, 0, cx - axMax);
-//     const dy = Math.max(ayMin - cy, 0, cy - ayMax);
-//     const dz = Math.max(azMin - cz, 0, cz - azMax);
-//     const dist = Math.hypot(dx, dy, dz);
-//     return dist < radius;
-// }
 
 function setGameOver(msg) {
     gameOver = true;
@@ -1231,7 +1002,7 @@ function tick(now) {
         // if (billboard.position.z > 6) resetBillboard(bb, true);
         // multiple billboards (pool)
         for (const bb of billboardPool) {
-          bb.position.z -= worldMove;
+          bb.position.z += worldMove;
           if (bb.position.z > 6) resetBillboard(bb);
         }
 
@@ -1243,26 +1014,11 @@ function tick(now) {
         triggerRiftFlash();
         updateVideoBackdrop();
 
-        // for (const o of obstacles) {
-        //     o.position.z += worldMove;
-        //     if (o.position.z > 6) resetObstacle(o);
-        // }
-
-        // const s_pd = playerSpeed(dt);
         updatePlayers(dt);
         updateCamera(dt);
-        const eSpd = enemySpeed(player0Speed);
+        const eSpd = enemySpeed();
 
-        //   if (player) {
-        //     player.position.z += eSpd * dt;
-        //     // updatePlayer(dt);
-        //     // updateEnemyLane(dt);
-        // }
-
-          // camera.position.z = 4;
-         
-
-          // renderer.render(scene, camera);
+        if (enemy) {enemy.position.z -= eSpd * dt;}
 
         if (stumbleTimer > 0) { stumbleTimer = Math.max(0, stumbleTimer - dt); }
         if (lineCompleteBurst > 0) { lineCompleteBurst = Math.max(0, lineCompleteBurst - dt * 1.5); }
