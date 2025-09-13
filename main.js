@@ -1,6 +1,9 @@
 
 console.log("Started");
 
+
+console.log("Started");
+
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader";
@@ -10,8 +13,11 @@ const canvas = document.getElementById("game");
 const renderer = new THREE.WebGLRenderer({
     canvas,
     antialias: true,
+    canvas,
+    antialias: true,
 });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
 renderer.setSize(innerWidth, innerHeight);
 
 const scene = new THREE.Scene();
@@ -21,7 +27,14 @@ scene.fog = new THREE.Fog(new THREE.Color(0x2a0b07), 10, 220); // deep red-ish f
 
 // Camera + Controls
 const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.1, 1000);
+
+// --- STRANGER THINGS TONE ---
+scene.fog = new THREE.Fog(new THREE.Color(0x2a0b07), 10, 220); // deep red-ish fog
+
+// Camera + Controls
+const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.1, 1000);
 camera.position.set(0, 2.2, 5);
+// camera.rotation.y = Math.PI / 2;
 // camera.rotation.y = Math.PI / 2;
 
 const controls = new OrbitControls(camera, renderer.domElement);
@@ -37,14 +50,26 @@ function resize() {
 }
 addEventListener("resize", resize);
 resize();
+// resize
+function resize() {
+    renderer.setSize(innerWidth, innerHeight);
+    camera.aspect = innerWidth / innerHeight;
+    camera.updateProjectionMatrix();
+}
+addEventListener("resize", resize);
+resize();
 
+// ---------- Lighting ----------
 // ---------- Lighting ----------
 const hemi = new THREE.HemisphereLight(0xffe9d6, 0x0b0b10, 0.8);
 scene.add(hemi);
 
+
 const dir = new THREE.DirectionalLight(0xffd1a6, 0.9);
 dir.position.set(5, 10, 2);
 scene.add(dir);
+
+// extra fill red-ish rim to tint scene
 
 // extra fill red-ish rim to tint scene
 const fillLight = new THREE.PointLight(0xff6b3b, 0.12, 40);
@@ -53,15 +78,29 @@ scene.add(fillLight);
 
 // lightning (dynamic)
 const lightningLight = new THREE.PointLight(0xffffff, 0, 120); // start off
+
+// lightning (dynamic)
+const lightningLight = new THREE.PointLight(0xffffff, 0, 120); // start off
 lightningLight.position.set(0, 30, -40);
 scene.add(lightningLight);
 
 // ---------- SKY / BACKDROP ----------
 // Uses the provided image as dramatic clouds background. We set it as a large distant plane
+// ---------- SKY / BACKDROP ----------
+// Uses the provided image as dramatic clouds background. We set it as a large distant plane
 const loader = new THREE.TextureLoader();
 loader.load("/backdrop3.png", function (texture) {
     scene.background = texture; // directly set as background
+loader.load("/backdrop3.png", function (texture) {
+    scene.background = texture; // directly set as background
 });
+// Create HTML video element
+// ---------- SKY / BACKDROP ----------
+
+// Create HTML video element
+// --- Video Element ---
+const video = document.createElement('video');
+video.src = '/background.mp4';  // your file
 // Create HTML video element
 // ---------- SKY / BACKDROP ----------
 
@@ -76,6 +115,9 @@ video.playsInline = true;
 video.play().catch(err => console.warn("Autoplay blocked:", err));
 
 // --- Video Texture ---
+video.play().catch(err => console.warn("Autoplay blocked:", err));
+
+// --- Video Texture ---
 const videoTexture = new THREE.VideoTexture(video);
 videoTexture.minFilter = THREE.LinearFilter;
 videoTexture.magFilter = THREE.LinearFilter;
@@ -83,15 +125,19 @@ videoTexture.generateMipmaps = false;
 videoTexture.colorSpace = THREE.SRGBColorSpace;
 
 // --- Fullscreen Quad ---
+
+// --- Fullscreen Quad ---
 const videoGeometry = new THREE.PlaneGeometry(25, 25);
 const videoMaterial = new THREE.MeshBasicMaterial({ map: videoTexture });
 const videoMesh = new THREE.Mesh(videoGeometry, videoMaterial);
+
 
 videoMesh.material.depthTest = false;
 videoMesh.material.depthWrite = false;
 videoMesh.renderOrder = -1;
 videoMesh.position.y = 2.5;
 scene.add(videoMesh);
+
 
 function updateVideoBackdrop() {
     videoMesh.position.copy(camera.position);
@@ -140,11 +186,25 @@ function makeRoadTexture() {
     const c = document.createElement("canvas");
     c.width = W; c.height = H;
     const ctx = c.getContext("2d");
+    const W = 512, H = 2048; // tall so repeat looks continuous
+    const c = document.createElement("canvas");
+    c.width = W; c.height = H;
+    const ctx = c.getContext("2d");
 
     // background asphalt
     ctx.fillStyle = "#11131a";
     ctx.fillRect(0, 0, W, H);
+    // background asphalt
+    ctx.fillStyle = "#11131a";
+    ctx.fillRect(0, 0, W, H);
 
+    // subtle road noise
+    for (let i = 0; i < 8000; i++) {
+        const x = Math.random() * W, y = Math.random() * H;
+        const a = Math.random() * 0.06;
+        ctx.fillStyle = `rgba(255,255,255,${a})`;
+        ctx.fillRect(x, y, 1, 1);
+    }
     // subtle road noise
     for (let i = 0; i < 8000; i++) {
         const x = Math.random() * W, y = Math.random() * H;
@@ -170,7 +230,29 @@ function makeRoadTexture() {
     ctx.fillStyle = "rgba(200,200,200,0.03)";
     ctx.fillRect(20, 0, 2, H);
     ctx.fillRect(W - 22, 0, 2, H);
+    // center double stripe (yellow)
+    ctx.fillStyle = "#e6c84a";
+    const centerX = W / 2;
+    const stripeW = 8;
+    const dashH = 60;
+    const gapH = 40;
+    let y = 0;
+    while (y < H) {
+        ctx.fillRect(centerX - 18, y, stripeW + 4, dashH);
+        ctx.fillRect(centerX + 10, y, stripeW + 4, dashH);
+        y += dashH + gapH;
+    }
 
+    // side edges (faded)
+    ctx.fillStyle = "rgba(200,200,200,0.03)";
+    ctx.fillRect(20, 0, 2, H);
+    ctx.fillRect(W - 22, 0, 2, H);
+
+    const tex = new THREE.CanvasTexture(c);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(1, 20); // repeat vertically
+    tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    return tex;
     const tex = new THREE.CanvasTexture(c);
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
     tex.repeat.set(1, 20); // repeat vertically
@@ -178,9 +260,14 @@ function makeRoadTexture() {
     return tex;
 }
 
+
 const roadTex = makeRoadTexture();
 const groundGeo = new THREE.PlaneGeometry(12, 400, 1, 1); // wider road
+const groundGeo = new THREE.PlaneGeometry(12, 400, 1, 1); // wider road
 const groundMat = new THREE.MeshStandardMaterial({
+    map: roadTex,
+    metalness: 0.05,
+    roughness: 0.9,
     map: roadTex,
     metalness: 0.05,
     roughness: 0.9,
@@ -639,6 +726,8 @@ const textures = {
 const lanes = [-3.75, -1.25, 1.25, 3.75];
 
 // Arrays to hold 4 players and their mixers/actions
+
+// Arrays to hold 4 players and their mixers/actions
 const players = [];
 const playerMixers = [];
 const playerActions = [];
@@ -662,6 +751,7 @@ for (let i = 0; i < 4; i++) {
     playerMixers[i] = new THREE.AnimationMixer(players[i]);
     if (object.animations && object.animations.length > 0) {
         playerActions[i] = playerMixers[i].clipAction(object.animations[0]);
+        playerActions[i] = playerMixers[i].clipAction(object.animations[0]);
     }
     // fbxLoader.load('/models/running.fbx', (animObj) => {
     //     if (animObj.animations.length > 0) {
@@ -679,11 +769,13 @@ for (let i = 0; i < 4; i++) {
     });
     resetPositions();
 });
+});
 }
 
 // --- Typing Logic ---
 // ---------- Typing + Game Logic (updated) ----------
 const promptEl = document.getElementById("prompt");
+const inputEl = document.getElementById("input");
 const inputEl = document.getElementById("input");
 const wpmEl = document.getElementById("wpm");
 const accEl = document.getElementById("acc");
@@ -915,6 +1007,14 @@ function updateCamera() {
 
     // always look at player[0]
     // camera.lookAt(players[0].position.x, players[0].position.y + 1.5, players[0].position.z);
+    if (!players[0]) return;
+
+    // keep current x and y, just update z relative to player[0]
+    const offsetZ = 6; // distance behind player[0]
+    camera.position.z = players[0].position.z + offsetZ;
+
+    // always look at player[0]
+    // camera.lookAt(players[0].position.x, players[0].position.y + 1.5, players[0].position.z);
 }
 
 function enemySpeed() {
@@ -1099,7 +1199,12 @@ let last = performance.now();
 let start = false;
 newLine();
 
+let start = false;
+newLine();
+
 function tick(now) {
+    const dt = Math.min(0.033, (now - last) / 1000);
+    last = now;
     const dt = Math.min(0.033, (now - last) / 1000);
     last = now;
 
