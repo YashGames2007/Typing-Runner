@@ -1,17 +1,34 @@
+// Required imports for Three.js, controls, loader, and socket.io
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader";
 import { io } from "socket.io-client";
 
-// --- Basic Setup ---
 console.log("Started");
 
+// -- HTML Element Grabs (validate these exist in your HTML!) --
 const canvas = document.getElementById("game");
-const renderer = new THREE.WebGLRenderer({
-  canvas,
-  antialias: true,
-});
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+const lobby = document.getElementById("lobby");
+const status = document.getElementById("status");
+const playerNameInput = document.getElementById("playerName");
+const roomCodeInput = document.getElementById("roomCode");
+const createBtn = document.getElementById("createBtn");
+const joinBtn = document.getElementById("joinBtn");
+const hud = document.getElementById("hud");
+const inputEl = document.getElementById("input");
+const promptEl = document.getElementById("prompt");
+const wpmEl = document.getElementById("wpm");
+const accEl = document.getElementById("acc");
+const spdEl = document.getElementById("spd");
+const gapEl = document.getElementById("gap");
+const refreshBtn = document.getElementById("refresh");
+const pauseBtn = document.getElementById("pause");
+const prog = document.getElementById("prog");
+const banner = document.getElementById("banner");
+
+// -- Three.js Setup --
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 
 const scene = new THREE.Scene();
@@ -30,14 +47,14 @@ controls.enablePan = false;
 controls.enableZoom = false;
 controls.target.set(0, 1.5, 0);
 
+// Handle browser resizes
 window.addEventListener("resize", () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
 });
-renderer.setSize(window.innerWidth, window.innerHeight);
 
-// --- Lighting (as per your original code) ---
+// -- Lighting --
 const hemi = new THREE.HemisphereLight(0xffe9d6, 0x0b0b10, 0.8);
 scene.add(hemi);
 const dir = new THREE.DirectionalLight(0xffd1a6, 0.9);
@@ -50,13 +67,13 @@ const lightningLight = new THREE.PointLight(0xffffff, 0, 120);
 lightningLight.position.set(0, 30, -40);
 scene.add(lightningLight);
 
-// --- Background ---
+// -- Background Image (optional fallback) --
 const loader = new THREE.TextureLoader();
 loader.load("/backdrop3.png", (texture) => {
   scene.background = texture;
 });
 
-// --- Video Backdrop ---
+// -- Video Backdrop --
 const video = document.createElement("video");
 video.src = "/background.mp4";
 video.loop = true;
@@ -75,39 +92,32 @@ const videoMesh = new THREE.Mesh(videoGeometry, videoMaterial);
 videoMesh.material.depthTest = false;
 videoMesh.material.depthWrite = false;
 videoMesh.renderOrder = -1;
-videoMesh.position.y = 2.5;
 scene.add(videoMesh);
 function updateVideoBackdrop() {
+  // Keeps the video "behind" the player's view
   videoMesh.position.copy(camera.position);
   videoMesh.position.z -= 5;
   videoMesh.position.y = camera.position.y;
 }
 
-// --- Road ---
+// -- Road --
 function makeRoadTexture() {
-  const W = 512,
-    H = 2048;
+  const W = 512, H = 2048;
   const c = document.createElement("canvas");
-  c.width = W;
-  c.height = H;
+  c.width = W; c.height = H;
   const ctx = c.getContext("2d");
-
   ctx.fillStyle = "#11131a";
   ctx.fillRect(0, 0, W, H);
 
+  // Noise
   for (let i = 0; i < 8000; i++) {
-    const x = Math.random() * W,
-      y = Math.random() * H,
-      a = Math.random() * 0.06;
+    const x = Math.random() * W, y = Math.random() * H, a = Math.random() * 0.06;
     ctx.fillStyle = `rgba(255,255,255,${a})`;
     ctx.fillRect(x, y, 1, 1);
   }
-
+  // Dashes
   ctx.fillStyle = "#e6c84a";
-  const centerX = W / 2;
-  const stripeW = 8;
-  const dashH = 60;
-  const gapH = 40;
+  const centerX = W / 2, stripeW = 8, dashH = 60, gapH = 40;
   let y = 0;
   while (y < H) {
     ctx.fillRect(centerX - 18, y, stripeW + 4, dashH);
@@ -136,69 +146,54 @@ ground.rotation.x = -Math.PI / 2;
 ground.position.z = -150;
 scene.add(ground);
 
-// --- Players Data ---
+// --- Player Models/Anim ---
 const fbxLoader = new FBXLoader();
 const lanes = [-3.75, -1.25, 1.25, 3.75];
-const players = [];
+const players = new Array(4);
 const playerMixers = [];
 const playerActions = [];
 const playerIdleActions = [];
+let loadedCount = 0;
+
+// Load models for up to 4 players
 for (let i = 0; i < 4; i++) {
-  fbxLoader.load(`/models/player${0}.fbx`, (object) => {
-    players[i] = object;
-    players[i].scale.set(0.01, 0.01, 0.01);
-    players[i].rotation.set(0, 135, 0);
-    scene.add(players[i]);
-    playerMixers[i] = new THREE.AnimationMixer(players[i]);
-    if (object.animations && object.animations.length > 0) {
-      playerActions[i] = playerMixers[i].clipAction(object.animations[0]);
-    }
-    fbxLoader.load("/models/idle.fbx", (animObj) => {
-      if (animObj.animations.length > 0) {
-        const idleClip = animObj.animations[0];
-        playerIdleActions[i] = playerMixers[i].clipAction(idleClip);
-        playerIdleActions[i].play();
+  fbxLoader.load(
+    `/models/player${i}.fbx`, // Now uses unique model per player
+    (object) => {
+      players[i] = object;
+      players[i].scale.set(0.01, 0.01, 0.01);
+      players[i].rotation.set(0, Math.PI * 0.75, 0); // in radians
+      scene.add(players[i]);
+      playerMixers[i] = new THREE.AnimationMixer(players[i]);
+      if (object.animations && object.animations.length > 0) {
+        playerActions[i] = playerMixers[i].clipAction(object.animations[0]);
       }
-    });
-    resetPositions();
-  });
+      fbxLoader.load("/models/idle.fbx", (animObj) => {
+        if (animObj.animations.length > 0) {
+          const idleClip = animObj.animations[0];
+          playerIdleActions[i] = playerMixers[i].clipAction(idleClip);
+          playerIdleActions[i].play();
+        }
+        loadedCount++;
+        if (loadedCount === 4) resetPositions();
+      });
+    },
+    undefined,
+    (err) => console.error(`Failed to load FBX:`, err)
+  );
 }
 
-// --- Socket.io Setup ---
-const socket = io(); // Change to your backend URL if needed
+// --- Socket.IO Setup (customize endpoint if NOT same host/port) ---
+const socket = io(); // You can use io("http://localhost:3000") etc if different server
 
-// Lobby UI Elements
-const lobby = document.getElementById("lobby");
-const status = document.getElementById("status");
-const playerNameInput = document.getElementById("playerName");
-const roomCodeInput = document.getElementById("roomCode");
-const createBtn = document.getElementById("createBtn");
-const joinBtn = document.getElementById("joinBtn");
-const hud = document.getElementById("hud");
-const inputEl = document.getElementById("input");
-const promptEl = document.getElementById("prompt");
-const wpmEl = document.getElementById("wpm");
-const accEl = document.getElementById("acc");
-const spdEl = document.getElementById("spd");
-const gapEl = document.getElementById("gap");
-const refreshBtn = document.getElementById("refresh");
-const pauseBtn = document.getElementById("pause");
-const prog = document.getElementById("prog");
-const banner = document.getElementById("banner");
+// --- Game State ---
+let myName = "", myRoom = "";
+let playerList = [], playerStates = {};
+let startedAt = null, paused = false, gameOver = false, target = "";
 
-let myName = "";
-let myRoom = "";
-let playerList = [];
-let playerStates = {};
-let startedAt = null;
-let paused = false;
-let gameOver = false;
-let target = "";
-
-// Utility: generate valid room code (2 letters + 2 digits)
+// --- Utility ---
 function generateRoomCode() {
-  const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-  const digits = "0123456789";
+  const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ", digits = "0123456789";
   return (
     letters.charAt(Math.floor(Math.random() * letters.length)) +
     letters.charAt(Math.floor(Math.random() * letters.length)) +
@@ -207,38 +202,30 @@ function generateRoomCode() {
   );
 }
 
-// --- Lobby button handlers ---
+// --- Lobby Button Handlers ---
 createBtn.addEventListener("click", () => {
   const name = playerNameInput.value.trim();
   if (!name) return (status.textContent = "Please enter your name.");
   const room = generateRoomCode();
-  myName = name;
-  myRoom = room;
+  myName = name; myRoom = room;
   status.textContent = `Creating room ${room} ...`;
   socket.emit("join-game", { roomId: room, name });
 });
-
 joinBtn.addEventListener("click", () => {
   const name = playerNameInput.value.trim();
   const room = roomCodeInput.value.trim().toUpperCase();
   if (!name || !room) return (status.textContent = "Please enter name and room code.");
-  myName = name;
-`  myRoom = room;
+  myName = name; myRoom = room;
   status.textContent = `Joining room ${room} ...`;
   socket.emit("join-game", { roomId: room, name });
-  console.log("Joining room:", room, name);
-  
 });
 
-// --- Socket Event Handlers ---
-
+// --- Socket Events (bug fix: typo in leaderboard-update) ---
 socket.on("error-message", (msg) => {
   status.textContent = msg;
 });
-
 socket.on("player-list", (list) => {
   playerList = [...list];
-  // After join success, switch UI to game view
   if (lobby.style.display !== "none") {
     lobby.style.display = "none";
     hud.style.display = "flex";
@@ -247,14 +234,12 @@ socket.on("player-list", (list) => {
     inputEl.focus();
   }
 });
-
-socket.on("leaderboar`d-update", (list) => {
+socket.on("leaderboard-update", (list) => {
   playerList = [...list];
   list.forEach((p) => {
     playerStates[p.name] = { ...p };
   });
 });
-
 socket.on("game-start", ({ paragraph }) => {
   target = paragraph;
   renderPrompt();
@@ -265,7 +250,6 @@ socket.on("game-start", ({ paragraph }) => {
   gameOver = false;
   banner.style.display = "none";
 });
-
 socket.on("game-over", ({ winner }) => {
   banner.textContent = `${winner} wins! Press Enter to play again.`;
   banner.style.display = "";
@@ -274,18 +258,15 @@ socket.on("game-over", ({ winner }) => {
 });
 
 // --- Game Logic ---
-
 function resetPositions() {
   for (let i = 0; i < players.length; i++) {
     if (players[i]) players[i].position.set(lanes[i], 0, 0);
     playerActions[i]?.reset();
   }
 }
-
 function findMyIndex() {
   return playerList.findIndex((p) => p.name === myName);
 }
-
 function animatePlayerStates(dt) {
   for (let i = 0; i < players.length; i++) {
     const player = players[i];
@@ -296,8 +277,9 @@ function animatePlayerStates(dt) {
     if (!pdata) continue;
 
     player.position.x = lanes[i];
-    player.position.z = -pdata.progress * 60; // course length
+    player.position.z = -pdata.progress * 60;
 
+    // Animation state
     if (pdata.speed > 0.01) {
       playerIdleActions[i]?.stop();
       if (!playerActions[i]?.isRunning()) playerActions[i]?.play();
@@ -312,8 +294,7 @@ function animatePlayerStates(dt) {
 inputEl.addEventListener("input", () => {
   if (gameOver || paused) return;
   const inputVal = inputEl.value || "";
-  let typedCount = inputVal.length;
-  let wrongCount = 0;
+  let typedCount = inputVal.length, wrongCount = 0;
   for (let i = 0; i < inputVal.length && i < target.length; i++) {
     if (inputVal[i] !== target[i]) wrongCount++;
   }
@@ -324,14 +305,9 @@ inputEl.addEventListener("input", () => {
   const wpm = typedCount === 0 ? 0 : typedCount / 5 / minutes;
   const acc = typedCount === 0 ? 1 : Math.max(0, (typedCount - wrongCount) / typedCount);
   const progress = Math.min(1, typedCount / (target.length || 1));
+  // 'speed' property could be added for extra metric
 
-  socket.emit("progress-update", {
-    roomId: myRoom,
-    name: myName,
-    progress,
-    wpm,
-    acc,
-  });
+  socket.emit("progress-update", { roomId: myRoom, name: myName, progress, wpm, acc });
 
   renderPrompt();
   prog.style.width = `${progress * 100}%`;
@@ -345,8 +321,7 @@ function renderPrompt() {
   const inputVal = inputEl.value || "";
   let html = "";
   for (let i = 0; i < target.length; i++) {
-    const expected = target[i];
-    const typed = inputVal[i];
+    const expected = target[i], typed = inputVal[i];
     if (typed !== undefined) {
       html += `<span class="char ${typed === expected ? "correct" : "wrong"}">${escapeHTML(expected)}</span>`;
     } else if (i === inputVal.length) {
@@ -357,11 +332,11 @@ function renderPrompt() {
   }
   promptEl.innerHTML = html;
 }
-
 function escapeHTML(s) {
-  return String(s).replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[m]);
+  return String(s).replace(/[&<>"']/g, (m) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m])
+  );
 }
-
 function updateCamera() {
   const myIndex = findMyIndex();
   if (!players[myIndex]) return;
@@ -369,7 +344,6 @@ function updateCamera() {
   camera.position.z = players[myIndex].position.z + 6;
   camera.lookAt(players[myIndex].position.x, players[myIndex].position.y + 1.5, players[myIndex].position.z);
 }
-
 function updateHUD() {
   const myIndex = findMyIndex();
   const myStats = playerStates[myName] || { wpm: 0, acc: 1, speed: 0, progress: 0 };
@@ -391,7 +365,7 @@ function updateHUD() {
   accEl.className = myStats.acc < 0.93 ? "danger" : "ok";
 }
 
-// Main loop
+// -- Main Three.js Animation Loop --
 let last = performance.now();
 function tick(now) {
   const dt = Math.min(0.033, (now - last) / 1000);
@@ -407,7 +381,7 @@ function tick(now) {
 }
 requestAnimationFrame(tick);
 
-// Controls
+// -- Controls --
 refreshBtn.addEventListener("click", () => {
   inputEl.value = "";
   startedAt = null;
@@ -415,12 +389,11 @@ refreshBtn.addEventListener("click", () => {
   banner.style.display = "";
   banner.textContent = "Waiting for players...";
 });
-
 pauseBtn.addEventListener("click", () => {
   paused = !paused;
   banner.style.display = paused ? "" : "none";
 });
-
+// Enter to restart if over
 document.addEventListener("keydown", (e) => {
   if (gameOver && e.key === "Enter") {
     socket.emit("player-ready", { roomId: myRoom, name: myName });
