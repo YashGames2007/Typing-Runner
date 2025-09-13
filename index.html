@@ -183,27 +183,32 @@
                 <div class="chip">Enemy: <span id="gap">Lead 0m</span></div>
             </div>
 
-      <div class="typebox">
-        <div class="prompt" id="prompt"></div>
-        <div class="controls">
-          <input
-            id="input"
-            class="input"
-            autocomplete="off"
-            spellcheck="false"
-            placeholder="Type here…"
-          />
-          <button id="refresh" class="btn">New Line</button>
-          <button id="pause" class="btn">Pause</button>
+            <div class="typebox">
+                <div class="prompt" id="prompt"></div>
+                <div class="controls">
+                    <input
+                        id="input"
+                        class="input"
+                        autocomplete="off"
+                        spellcheck="false"
+                        placeholder="Type here…"
+                    />
+                    <button id="refresh" class="btn">New Line</button>
+                    <button id="pause" class="btn">Pause</button>
+                </div>
+                <div class="progress" style="margin-top: 12px">
+                    <div id="prog"></div>
+                </div>
+            </div>
         </div>
-        <div class="progress" style="margin-top: 12px">
-          <div id="prog"></div>
-        </div>
-      </div>
-    </div>
-
-    <script type="module" src="main.js"></script>
-    
-
-  </body>
+        <script type="module" src="/main.js"></script>
+        <!-- <script type="importmap">
+                {
+                "imports": {
+                    "three": "https://cdn.jsdelivr.net/npm/three@<version>/build/three.module.js",
+                    "three/addons/": "https://cdn.jsdelivr.net/npm/three@<version>/examples/jsm/"
+                }
+            }
+        </script> -->
+    </body>
 </html>
